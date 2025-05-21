@@ -39,7 +39,7 @@ def get_restaurants(gmaps: googlemaps.Client, location: str, radius: int) -> Lis
         restaurants.extend(result.get('results', []))
         
         # Get next page only if we need more results to reach 50
-        while 'next_page_token' in result and len(restaurants) < 50:
+        while 'next_page_token' in result and len(restaurants) < 1000:
             time.sleep(2)
             result = gmaps.places_nearby(
                 location=(lat, lng),
