@@ -6,7 +6,7 @@ from datetime import datetime
 
 def get_api_key() -> str:
     # Replace with your Google Cloud API key
-    return "AIzaSyCBaGYJsxA3ESVEP9fDxKkkdkrqzHBNQtI"
+    return "AIzaSyBfbFOPk9gTu1-wQyxRfqoBZB5kLXRdHu0"
 
 def get_location_suggestions(gmaps: googlemaps.Client, input_text: str) -> List[Dict]:
     try:
@@ -28,31 +28,43 @@ def get_restaurants(gmaps: googlemaps.Client, location: str, radius: int) -> Lis
         lat = geocode_result[0]['geometry']['location']['lat']
         lng = geocode_result[0]['geometry']['location']['lng']
         
-        restaurants = []
+        all_places = []
         
-        result = gmaps.places_nearby(
-            location=(lat, lng),
-            radius=radius,
-            type='restaurant'
-        )
+        # Place types focused on dine-in establishments
+        place_types = [
+            'restaurant',      # Full-service restaurants
+            'cafe',           # Cafes and coffee shops with seating
+            'food_court',     # Food courts with shared seating
+            'bar',            # Bars that serve food
+            'bakery'          # Bakeries with seating areas
+        ]
         
-        restaurants.extend(result.get('results', []))
-        
-        # Get next page only if we need more results to reach 1000
-        while 'next_page_token' in result and len(restaurants) < 1000:
-            time.sleep(2)
+        for place_type in place_types:
             result = gmaps.places_nearby(
                 location=(lat, lng),
                 radius=radius,
-                type='restaurant',
-                page_token=result['next_page_token']
+                type=place_type
             )
-            restaurants.extend(result.get('results', []))
+            
+            all_places.extend(result.get('results', []))
+            
+            while 'next_page_token' in result and len(all_places) < 1000:
+                time.sleep(2)
+                result = gmaps.places_nearby(
+                    location=(lat, lng),
+                    radius=radius,
+                    type=place_type,
+                    page_token=result['next_page_token']
+                )
+                all_places.extend(result.get('results', []))
+        
+        # Remove duplicates based on place_id
+        unique_places = {place['place_id']: place for place in all_places}.values()
         
         # Limit to 1000 results
-        return restaurants[:1000]
+        return list(unique_places)[:1000]
     except Exception as e:
-        print(f"Error getting restaurants: {e}")
+        print(f"Error getting places: {e}")
         return []
 
 def save_to_csv(restaurants_data: List[Dict], location: str, gmaps: googlemaps.Client):
@@ -108,12 +120,12 @@ def main():
     radius_meters = int(radius_km * 1000)  # Convert km to meters
 
     # Get restaurants
-    print(f"\nSearching for restaurants near {selected_location}...")
+    print(f"\nSearching for restaurants and cafes near {selected_location}...")
     restaurants = get_restaurants(gmaps, selected_location, radius_meters)
 
     # Display and save results
     if restaurants:
-        print(f"\nFound {len(restaurants)} restaurants:")
+        print(f"\nFound {len(restaurants)} food businesses:")
         
         # Create a list to store processed restaurant data
         restaurant_data = []
