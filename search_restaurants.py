@@ -3,6 +3,7 @@ from typing import List, Dict
 import time
 import csv
 from datetime import datetime
+from math import cos, radians
 
 def get_api_key() -> str:
     # Replace with your Google Cloud API key
@@ -30,33 +31,49 @@ def get_restaurants(gmaps: googlemaps.Client, location: str, radius: int) -> Lis
         
         all_places = []
         
-        # Place types focused on dine-in establishments
+        # Extended place types with more specific categories
         place_types = [
-            'restaurant',      # Full-service restaurants
-            'cafe',           # Cafes and coffee shops with seating
-            'food_court',     # Food courts with shared seating
-            'bar',            # Bars that serve food
-            'bakery'          # Bakeries with seating areas
+            'restaurant',
+            'cafe',
+            'food_court',
+            'bar',
+            'bakery',
+            # Additional specific restaurant types
+            'indian_restaurant',
+            'chinese_restaurant',
+            'fast_food_restaurant',
+            'italian_restaurant',
+            'vegetarian_restaurant'
         ]
         
-        for place_type in place_types:
-            result = gmaps.places_nearby(
-                location=(lat, lng),
-                radius=radius,
-                type=place_type
-            )
-            
-            all_places.extend(result.get('results', []))
-            
-            while 'next_page_token' in result and len(all_places) < 1000:
-                time.sleep(2)
-                result = gmaps.places_nearby(
-                    location=(lat, lng),
-                    radius=radius,
-                    type=place_type,
-                    page_token=result['next_page_token']
-                )
-                all_places.extend(result.get('results', []))
+        # Create a grid of points to search from
+        grid_size = 2  # This will create a 2x2 grid
+        lat_step = (radius * 2 / 111000) / grid_size  # Convert meters to degrees
+        lng_step = (radius * 2 / (111000 * cos(radians(lat)))) / grid_size
+        
+        for i in range(grid_size):
+            for j in range(grid_size):
+                search_lat = lat + (i - grid_size/2) * lat_step
+                search_lng = lng + (j - grid_size/2) * lng_step
+                
+                for place_type in place_types:
+                    result = gmaps.places_nearby(
+                        location=(search_lat, search_lng),
+                        radius=radius // grid_size,
+                        type=place_type
+                    )
+                    
+                    all_places.extend(result.get('results', []))
+                    
+                    while 'next_page_token' in result:
+                        time.sleep(2)
+                        result = gmaps.places_nearby(
+                            location=(search_lat, search_lng),
+                            radius=radius // grid_size,
+                            type=place_type,
+                            page_token=result['next_page_token']
+                        )
+                        all_places.extend(result.get('results', []))
         
         # Remove duplicates based on place_id
         unique_places = {place['place_id']: place for place in all_places}.values()
